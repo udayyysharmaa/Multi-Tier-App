@@ -1,7 +1,7 @@
 {
   "SchemaVersion": 2,
-  "CreatedAt": "2024-10-23T10:43:16.882950251Z",
-  "ArtifactName": "onlinelearningofficial/fullstackwebsite:20",
+  "CreatedAt": "2024-10-23T10:47:47.674354912Z",
+  "ArtifactName": "onlinelearningofficial/fullstackwebsite:21",
   "ArtifactType": "container_image",
   "Metadata": {
     "OS": {
@@ -25,7 +25,8 @@
       "onlinelearningofficial/fullstackwebsite:17",
       "onlinelearningofficial/fullstackwebsite:18",
       "onlinelearningofficial/fullstackwebsite:19",
-      "onlinelearningofficial/fullstackwebsite:20"
+      "onlinelearningofficial/fullstackwebsite:20",
+      "onlinelearningofficial/fullstackwebsite:21"
     ],
     "RepoDigests": [
       "onlinelearningofficial/fullstackwebsite@sha256:5b10e2b1e1bbb30abf5fd7312b5e5c7bd6ba52b6823bedbe83ee09810b675077"
@@ -166,7 +167,7 @@
   },
   "Results": [
     {
-      "Target": "onlinelearningofficial/fullstackwebsite:20 (alpine 3.20.3)",
+      "Target": "onlinelearningofficial/fullstackwebsite:21 (alpine 3.20.3)",
       "Class": "os-pkgs",
       "Type": "alpine",
       "Vulnerabilities": [
