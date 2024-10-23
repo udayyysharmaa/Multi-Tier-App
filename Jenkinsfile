@@ -1,92 +1,87 @@
 pipeline {
     agent any
-    
     tools {
-        maven 'maven3'
+        maven 'maven'
+        jdk 'jdk17'
     }
-    
     environment {
-        IMAGE_NAME = "adijaiswal/bankapp"
-        TAG = "${env.BUILD_NUMBER}" 
-        SONAR_SCANNER= tool 'sonar-scanner'
+        SONAR_HOME = tool 'sonar-scanner'
+        IMAGE_NAME = "onlinelearningofficial/fullstackwebsite"
+        TAG = "${env.BUILD_NUMBER}"
     }
 
-    stages {       
-        stage('Compile') {
+    stages {
+        stage('Clone the Project') {
             steps {
-                sh "mvn compile"
+                git branch: 'main', url: 'https://github.com/udayyysharmaa/Multi-Tier-App.git'
             }
         }
-        
-        stage('Test') {
+
+        stage('Project Compile') {
             steps {
-                echo 'Hello World'
+                sh 'mvn compile -DskipTests=true'
             }
         }
-        
-        stage('SOnarQube') {
+
+        stage('Project Test') {
+            steps {
+                sh 'mvn test -DskipTests=true'
+            }
+        }
+
+        stage('Scan the File with Trivy') {
+            steps {
+                sh 'trivy fs --format json -o fs.json .'
+            }
+        }
+
+        stage('SonarQube Analysis') {
             steps {
                 withSonarQubeEnv('sonar') {
-                    sh ''' $SONAR_SCANNER/bin/sonar-scanner -Dsonar.projectKey=Multitier -Dsonar.projectName=Multitier \
-                    -Dsonar.java.binaries=target '''
+                    sh '''
+                    $SONAR_HOME/bin/sonar-scanner \
+                    -Dsonar.projectName=websiteproject \
+                    -Dsonar.projectKey=websiteproject \
+                    -Dsonar.java.binaries=target
+                    '''
                 }
             }
         }
-        
-        stage('Quality Gate Check') {
+
+        stage('SonarQube Quality Gate') {
             steps {
                 timeout(time: 1, unit: 'HOURS') {
-                    waitForQualityGate abortPipeline: false
+                    waitForQualityGate abortPipeline: true
                 }
             }
         }
-        
-        stage('Trivy FS') {
-            steps {
-                sh "trivy fs --format table -o fs.html ."
-            }
-        }
-        
-        stage('Build') {
-            steps {
-                sh "mvn package -DskipTests=true"
-            }
-        }
-        
-        stage('Publish artifacts') {
-            steps {
-                withMaven(globalMavenSettingsConfig: 'maven-settings', jdk: '', maven: 'maven3', mavenSettingsConfig: '', traceability: true) {
-                    sh "mvn deploy -DskipTests=true"
-                }
-            }
-        }
-        
+
         stage('Build Docker Image') {
             steps {
                 script {
-                    withDockerRegistry(credentialsId: 'docker-cred') {
-                        sh "docker build -t ${IMAGE_NAME}:${TAG} ."
+                    withDockerRegistry(credentialsId: 'dockerhub') {
+                        sh 'docker build -t ${IMAGE_NAME}:${TAG} .'
                     }
                 }
             }
         }
-        
-         stage('Trivy SCan Docker Image') {
+
+        stage('Scan Docker Image with Trivy') {
             steps {
-                sh "trivy image --format table -o image.html ${IMAGE_NAME}:${TAG}"
+                sh 'trivy image --scanners vuln --skip-db-update --format json -o dockerimagereport.json ${IMAGE_NAME}:${TAG}'
             }
         }
-        
-        stage('Push Docker Image') {
+
+        stage('Push Docker Image to Docker Hub') {
             steps {
                 script {
-                    withDockerRegistry(credentialsId: 'docker-cred') {
-                        sh "docker push ${IMAGE_NAME}:${TAG}"
+                    withDockerRegistry(credentialsId: 'dockerhub') {
+                        sh 'docker push ${IMAGE_NAME}:${TAG}'
                     }
                 }
             }
         }
-        
+
         stage('Update Kubernetes Manifest') {
             steps {
                 script {
@@ -97,42 +92,53 @@ pipeline {
                 }
             }
         }
-        
-        stage('Commit and Push Changes') {
-    steps {
-        script {
-            // Use GitHub credentials from Jenkins
-            withCredentials([usernamePassword(credentialsId: 'git-cred', usernameVariable: 'GIT_USERNAME', passwordVariable: 'GIT_PASSWORD')]) {
-                sh """
-                git config --global user.email "your-email@example.com"
-                git config --global user.name "Aditya Jaiswal"
-                git remote set-url origin https://${GIT_USERNAME}:${GIT_PASSWORD}@github.com/jaiswaladi246/Multi-Tier-Java.git
-                git pull origin main
-                git add ds.yml
-                git commit -m "Update image to ${IMAGE_NAME}:${TAG}"
-                git push origin main
-                """
-            }
-        }
-    }
-}
 
-         stage('K8 Deployment') {
+        stage('Commit and Push Changes') {
             steps {
-                withKubeConfig(caCertificate: '', clusterName: 'devopsshack-cluster', contextName: '', credentialsId: 'k8-cred', namespace: 'webapps', restrictKubeConfigAccess: false, serverUrl: 'https://761EA1E7FE48A0FB44798AAB35344BB7.gr7.ap-south-1.eks.amazonaws.com') {
-                        sh "kubectl apply -f ds.yml -n webapps"
-                        sleep 30
+                script {
+                    withCredentials([usernamePassword(credentialsId: 'GITCRED', passwordVariable: 'GIT_PASS', usernameVariable: 'GIT_USER')]) {
+                        // Use a here document for the Git commands to avoid interpolation warnings
+                        sh """
+                        git config --global user.email "udaysharmaniit12345@gmail.com"
+                        git config --global user.name "udayyysharmaa"
+                        git remote set-url origin https://${GIT_USER}:${GIT_PASS}@github.com/udayyysharmaa/Multi-Tier-App.git
+                        git pull origin main
+                        git add ds.yml dockerimagereport.json fs.json
+                        git commit -m "Update image to ${IMAGE_NAME}:${TAG}" || echo "No changes to commit"
+                        git push origin main
+                        """
                     }
+                }
             }
         }
-        
-        stage('Verify K8 Deployment') {
+        stage('Website Deploy to K8S') {
             steps {
-                withKubeConfig(caCertificate: '', clusterName: 'devopsshack-cluster', contextName: '', credentialsId: 'k8-cred', namespace: 'webapps', restrictKubeConfigAccess: false, serverUrl: 'https://761EA1E7FE48A0FB44798AAB35344BB7.gr7.ap-south-1.eks.amazonaws.com') {
-                        sh "kubectl get pods -n webapps"
-                        sh "kubectl get svc -n webapps"
-                       
-                    }
+                withKubeCredentials(kubectlCredentials: [[
+                    caCertificate: '', 
+                    clusterName: 'devopsshack-cluster', 
+                    contextName: '', 
+                    credentialsId: 'k8-token', 
+                    namespace: 'webapps', 
+                    serverUrl: 'https://87074A0EDCB85C20BD1EE835ECCA102F.gr7.ap-south-1.eks.amazonaws.com'
+                ]]) {
+                    sh "kubectl apply -f ds.yml -n webapps"
+                    sleep 30
+                }
+            }
+        }
+        stage('verify K8 Deployment') {
+            steps {
+                withKubeCredentials(kubectlCredentials: [[
+                    caCertificate: '', 
+                    clusterName: 'devopsshack-cluster', 
+                    contextName: '', 
+                    credentialsId: 'k8-token', 
+                    namespace: 'webapps', 
+                    serverUrl: 'https://87074A0EDCB85C20BD1EE835ECCA102F.gr7.ap-south-1.eks.amazonaws.com'
+                ]]) {
+                    sh "kubectl get pods -n webapps"
+                    sh "kubectl get svc -n webapps"
+                }
             }
         }
     }
