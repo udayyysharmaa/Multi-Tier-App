@@ -69,7 +69,7 @@ cat config
 
 # Copy to all and paste here
 ```bash
- echo -n '<copyhere' | base64
+ echo -n '<copyhere'> | base64
 ```
 
 # After that they provide the token and paste to gitlab variabales
